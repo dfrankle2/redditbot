@@ -1,0 +1,82 @@
+import pickle
+import praw
+import time
+import random
+import openai
+
+# Save commented_posts list to a file
+def save_commented_posts(commented_posts):
+    with open('commented_posts.pkl', 'wb') as file:
+        pickle.dump(commented_posts, file)
+
+# Load commented_posts list from file
+def load_commented_posts():
+    try:
+        with open('commented_posts.pkl', 'rb') as file:
+            return pickle.load(file)
+    except FileNotFoundError:
+        return []
+
+commented_posts = load_commented_posts()
+print(commented_posts)
+print("hello")
+# Your code to reply to a comment here
+
+openai.api_key = "x"
+
+# Reddit API credentials
+reddit = praw.Reddit(client_id='x',
+                     client_secret='x',
+                     username='x',
+                     password='x',
+                     user_agent="Poem-Gremlin returns an appropriate poem in reply to comments.")
+
+def is_nsfw(subreddit):
+    return subreddit.over18
+
+def is_allowed(subreddit):
+    # List of subreddit names to avoid
+    blacklist = ["funny", "colombia", "humor"]
+    return subreddit.display_name.lower() not in blacklist
+
+def get_random_comment(posts):
+    all_comments = []
+    for post in posts:
+        post.comments.replace_more(limit=12)
+        for comment in post.comments.list():
+            if is_allowed(comment.subreddit) and not is_nsfw(comment.subreddit):
+                all_comments.append(comment)
+    return random.choice(all_comments)
+
+
+
+while True:
+    posts = reddit.subreddit("all").rising(limit=12)
+    random_comment = get_random_comment(posts)
+    # Convert the comments to a list so that you can use random.choice
+    # Check if the post has already been replied to
+    if random_comment.submission.id not in commented_posts and len(random_comment.body) < 1000:
+        print(random_comment.body)
+        prompt = f"This comment: {random_comment.body} is in response to this title: {random_comment.submission.title}. If the comment is serious, reply in the form of a sonnet. If the comment is funny, reply in the form of a limerick. If the comment is neutral, reply in the form of a haiku. Add extra line breaks to ensure proper formatting. Remember to add extra line breaks. Now write one poem (free verse, haiku, or sonnet) in reply. Start with the title:"
+        response = openai.Completion.create(
+            engine="text-davinci-003",
+            prompt=prompt,
+            max_tokens=3675,
+            n=1,
+            stop=None,
+            temperature=0.65,
+        ).choices[0].text
+        #print(choices)
+        print(response)
+        if response:
+            random_comment.reply(response)
+            print(response)
+            commented_posts.append(random_comment.submission.id)  # Add the post to the list of replied to posts
+        # Save commented_posts after replying to a comment
+            save_commented_posts(commented_posts)
+    print("out of the if")
+    # Wait a random amount of time before checking for a new comment
+    wait_time = random.uniform(720, 2300)  # Wait between 12 minutes and 6 hours
+    print(f"Sleeping for {wait_time} seconds")
+    time.sleep(wait_time)
+
